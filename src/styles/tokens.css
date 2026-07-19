@@ -1,0 +1,174 @@
+/* MindMine design tokens
+ *
+ * Values are transcribed verbatim from docs/DESIGN-SPEC.md. Every contrast
+ * ratio in the comments has been computed, not estimated. Do not adjust a
+ * colour without re-checking the pairs it participates in.
+ */
+
+:root {
+  /* ---------------------------------------------------------------------
+   * Surfaces — four levels
+   * L0 canvas -> L1 card -> L2 inset block -> L3 raised block
+   * Ladder: 1.108 / 1.109 / 1.128. Deliberately near-equal steps so each
+   * level of depth reads with the same weight.
+   * Note L2 is DARKER than L1, but L3 rises again. Inset reads as a well.
+   * ------------------------------------------------------------------- */
+  --canvas: #f5f1e9;
+  --surface: #fffdf7;
+  --surface-inset: #f4f1ea;
+  --surface-raised: #ffffff;
+  --surface-hover: #ffffff;
+
+  --border: #e8e3d9;
+  --border-strong: #d6d0c3;
+
+  /* ---------------------------------------------------------------------
+   * Ink
+   * ink        15.24 on surface / 13.74 on inset
+   * secondary   5.59 / 5.04  — passes AA on both
+   * tertiary    2.96 / 2.67  — only >=18px or non-essential
+   * muted       1.91 / 1.72  — only already-inactive text (line-through carries
+   *                            the meaning, not the colour)
+   * ------------------------------------------------------------------- */
+  --ink: #26241f;
+  --ink-secondary: #6b6660;
+  --ink-tertiary: #9a948b;
+  --ink-muted: #c0b9af;
+
+  --dot: #e0dbd2; /* 1.30 against canvas */
+
+  --focus: #4a6fa5; /* 4.40 against canvas, above the 3:1 non-text threshold */
+
+  /* ---------------------------------------------------------------------
+   * Accent — one per card type.
+   * ink verified on THREE surfaces (tint / surface / inset) because accent
+   * appears in cards and inset blocks alike. Lowest ratio is 4.50.
+   * ------------------------------------------------------------------- */
+  --accent-note-tint: #f5f0e6;
+  --accent-note-line: #e0d3bb;
+  --accent-note-ink: #7d6b4c; /* 4.53 / 5.06 / 4.56 */
+
+  --accent-todo-tint: #edf2ec;
+  --accent-todo-line: #c9d9cb;
+  --accent-todo-ink: #57755e; /* 4.50 / 5.02 / 4.53 */
+
+  --accent-image-tint: #f8efeb;
+  --accent-image-line: #e5cec6;
+  --accent-image-ink: #906256; /* 4.56 / 5.08 / 4.58 */
+
+  --accent-link-tint: #edf1f5;
+  --accent-link-line: #cbd6e1;
+  --accent-link-ink: #596f88; /* 4.56 / 5.09 / 4.59 */
+
+  --accent-board-tint: #f3eef3;
+  --accent-board-line: #daccda;
+  --accent-board-ink: #7d6180; /* 4.71 / 5.30 / 4.78 */
+
+  /* ---------------------------------------------------------------------
+   * Elevation — always two layers: tight small blur for edge definition,
+   * loose large blur for float. A single shadow always looks cheap.
+   * Base is brown, not neutral grey: grey over cream reads as a stain.
+   * Inset blocks get NO shadow — they go down, not up.
+   * ------------------------------------------------------------------- */
+  --shadow-card: 0 1px 2px rgba(60, 48, 30, 0.05), 0 4px 12px rgba(60, 48, 30, 0.05);
+  --shadow-hover: 0 2px 4px rgba(60, 48, 30, 0.06), 0 8px 20px rgba(60, 48, 30, 0.07);
+  --shadow-drag: 0 12px 32px rgba(60, 48, 30, 0.14), 0 3px 8px rgba(60, 48, 30, 0.07);
+  --shadow-float: 0 16px 40px rgba(60, 48, 30, 0.12), 0 3px 8px rgba(60, 48, 30, 0.06);
+
+  /* ---------------------------------------------------------------------
+   * Typography
+   * Serif ONLY at >=26px (board title, empty state). Card titles are
+   * sans 15px/600 — serif loses its stroke contrast at small sizes and
+   * becomes a different font for no reason.
+   * ------------------------------------------------------------------- */
+  --font-display: 'Instrument Serif', 'Newsreader', Georgia, serif;
+  --font-body: 'Inter', ui-sans-serif, -apple-system, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* ---------------------------------------------------------------------
+   * Spacing & geometry
+   * Child radius is always smaller than parent: roughly parent - padding/2.
+   * Equal or larger child radius makes corners collide and feel cramped.
+   * ------------------------------------------------------------------- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 14px;
+  --space-4: 20px;
+  --space-5: 28px;
+  --space-6: 40px;
+
+  --radius-sm: 5px;
+  --radius-inset: 7px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  --grid: 8px; /* snap step; dot grid draws every 3rd step (24px) */
+
+  /* ---------------------------------------------------------------------
+   * Motion
+   * ------------------------------------------------------------------- */
+  --ease: cubic-bezier(0.2, 0, 0.13, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Same ladder shape as light mode: L2 darker than L1, L3 rises again. */
+    --canvas: #1a1917;
+    --surface: #232220;
+    --surface-inset: #1e1d1b;
+    --surface-raised: #2a2825;
+    --surface-hover: #292724;
+
+    --border: #322f2b;
+    --border-strong: #423e39;
+
+    --ink: #efebe4;
+    --ink-secondary: #a8a199;
+    --ink-tertiary: #7e7871;
+    --ink-muted: #5c5750;
+
+    --dot: #302e2b; /* 1.298 against canvas — matched to light mode */
+
+    --focus: #7da0d4;
+
+    /* Accent in dark mode: tint = 10% of ink over surface, line = 22%,
+     * ink lightened until >= 4.5:1. Values below are the lightened inks. */
+    --accent-note-tint: rgba(196, 168, 120, 0.1);
+    --accent-note-line: rgba(196, 168, 120, 0.22);
+    --accent-note-ink: #c4a878;
+
+    --accent-todo-tint: rgba(140, 179, 149, 0.1);
+    --accent-todo-line: rgba(140, 179, 149, 0.22);
+    --accent-todo-ink: #8cb395;
+
+    --accent-image-tint: rgba(207, 150, 134, 0.1);
+    --accent-image-line: rgba(207, 150, 134, 0.22);
+    --accent-image-ink: #cf9686;
+
+    --accent-link-tint: rgba(141, 168, 196, 0.1);
+    --accent-link-line: rgba(141, 168, 196, 0.22);
+    --accent-link-ink: #8da8c4;
+
+    --accent-board-tint: rgba(184, 150, 189, 0.1);
+    --accent-board-line: rgba(184, 150, 189, 0.22);
+    --accent-board-ink: #b896bd;
+
+    /* Shadows are near-invisible on dark surfaces; separation comes from
+     * the surface ladder instead. Kept for drag/float only. */
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.2), 0 4px 12px rgba(0, 0, 0, 0.18);
+    --shadow-hover: 0 2px 4px rgba(0, 0, 0, 0.24), 0 8px 20px rgba(0, 0, 0, 0.22);
+    --shadow-drag: 0 12px 32px rgba(0, 0, 0, 0.4), 0 3px 8px rgba(0, 0, 0, 0.24);
+    --shadow-float: 0 16px 40px rgba(0, 0, 0, 0.36), 0 3px 8px rgba(0, 0, 0, 0.22);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.08s !important;
+    transition-duration: 0.08s !important;
+    transition-property: opacity !important;
+  }
+}
