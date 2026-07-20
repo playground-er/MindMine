@@ -1,9 +1,9 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 
 import { useCanvasGestures } from '../hooks/useCanvasGestures'
+import { screenToWorld } from '../lib/geometry'
 import { useCanvasStore } from '../store/canvasStore'
-import type { Viewport } from '../types/canvas'
-import { EmptyState } from './EmptyState'
+import type { Point, Viewport } from '../types/canvas'
 import { ZoomControl } from './ZoomControl'
 
 /** Dot spacing at 100%. Snap is 8px; the grid draws every third step. */
@@ -27,7 +27,14 @@ function gridOpacity(zoom: number): number {
   return 1
 }
 
-export function Canvas() {
+interface Props {
+  children?: ReactNode
+  overlay?: ReactNode
+  onCreateAt?: (world: Point) => void
+  onBackgroundClick?: () => void
+}
+
+export function Canvas({ children, overlay, onCreateAt, onBackgroundClick }: Props) {
   const viewportRef = useRef<HTMLDivElement>(null)
   const gridRef = useRef<HTMLDivElement>(null)
   const worldRef = useRef<HTMLDivElement>(null)
@@ -77,6 +84,14 @@ export function Canvas() {
 
   const isPanning = useCanvasStore((s) => s.isPanning)
 
+  const toWorld = (clientX: number, clientY: number): Point => {
+    const rect = viewportRef.current?.getBoundingClientRect()
+    return screenToWorld(
+      { x: clientX - (rect?.left ?? 0), y: clientY - (rect?.top ?? 0) },
+      useCanvasStore.getState().viewport,
+    )
+  }
+
   return (
     <div
       ref={viewportRef}
@@ -85,6 +100,10 @@ export function Canvas() {
       tabIndex={0}
       className="relative h-full w-full touch-none overflow-hidden bg-canvas outline-none"
       style={{ cursor: isPanning ? 'grabbing' : 'default' }}
+      // Cards and the zoom control stop propagation, so an event that reaches
+      // this handler came from empty canvas.
+      onPointerDown={() => onBackgroundClick?.()}
+      onDoubleClick={(e) => onCreateAt?.(toWorld(e.clientX, e.clientY))}
     >
       <div
         ref={gridRef}
@@ -104,10 +123,10 @@ export function Canvas() {
         className="absolute left-0 top-0 will-change-transform"
         style={{ transformOrigin: '0 0' }}
       >
-        {/* Cards land here in Tahap 2. */}
+        {children}
       </div>
 
-      <EmptyState />
+      {overlay}
       <ZoomControl />
     </div>
   )

@@ -62,6 +62,8 @@ export function ZoomControl() {
         opacity: isIdle ? 0.45 : 1,
       }}
       onPointerEnter={() => setIsIdle(false)}
+      // Reaching the canvas would deselect the current card and start a pan.
+      onPointerDown={(e) => e.stopPropagation()}
     >
       <button
         type="button"
