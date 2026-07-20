@@ -4,37 +4,37 @@ Yang harus dikerjakan sendiri karena butuh akses ke akun kamu.
 
 ---
 
-## 1. Bikin repo GitHub
+## 1. Bikin repo GitHub — ✅ selesai
 
 1. Buka github.com → **New repository**
-2. Nama: `mindmine`
+2. Nama: `MindMine`
 3. **Private** (ini internal tool)
 4. Jangan centang "Add a README" — sudah ada di folder ini
 5. **Create repository**
 
 Jangan tutup halaman setelah dibuat; perintahnya muncul di situ.
 
-## 2. Push folder ini ke repo
+## 2. Push folder ini ke repo — ✅ selesai
 
-Download folder `mindmine`, lalu dari dalamnya:
+Repo: **https://github.com/playground-er/MindMine**
+
+Dari dalam folder `MindMine`:
 
 ```bash
 git init
 git add .
 git commit -m "Initial: docs, tokens, schema"
 git branch -M main
-git remote add origin https://github.com/USERNAME/mindmine.git
+git remote add origin https://github.com/playground-er/MindMine.git
 git push -u origin main
 ```
-
-Ganti `USERNAME` dengan username GitHub kamu.
 
 **Cek sebelum push**: `git status` tidak boleh menampilkan `.env.local`. Kalau muncul, berarti `.gitignore` tidak kebaca — hentikan dan perbaiki dulu.
 
 ## 3. Bikin project Supabase
 
 1. supabase.com → **New project**
-2. Nama: `mindmine`
+2. Nama: `MindMine`
 3. Database password: generate, **simpan di password manager**
 4. Region: **Southeast Asia (Singapore)** — paling dekat, latensi realtime paling rendah
 5. Tunggu ~2 menit sampai provisioning selesai
@@ -74,7 +74,7 @@ Dashboard → **Authentication** → **Providers** → **Email**:
 ## 7. Buka Claude Code
 
 ```bash
-cd mindmine
+cd MindMine
 claude
 ```
 
@@ -98,7 +98,7 @@ Sengaja tidak ada UI invite. Untuk tim internal yang jarang berubah, membangunny
 
 ## 9. Deploy (nanti, setelah tahap 4)
 
-1. vercel.com → **Add New** → **Project** → import repo `mindmine`
+1. vercel.com → **Add New** → **Project** → import repo `MindMine`
 2. Framework preset: **Vite** (terdeteksi otomatis)
 3. **Environment Variables**: masukkan `VITE_SUPABASE_URL` dan `VITE_SUPABASE_ANON_KEY`
 4. **Deploy**
