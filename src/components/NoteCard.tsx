@@ -24,6 +24,12 @@ interface Props {
   isEditing: boolean
   /** Peers with this card open. Drives the dashed ring — never a lock. */
   peerEditors: Member[]
+  /**
+   * Below 50% zoom cards drop to title only. Passed down as a boolean rather
+   * than read from the store per card, so a zoom change re-renders cards once
+   * at the threshold instead of on every intermediate value.
+   */
+  isCompact: boolean
   /** Take the card id so the parent can pass one stable function for all cards. */
   onCommitGeometry: (id: string, next: { x: number; y: number; w: number }) => void
   onTextSettled: (id: string, text: string, ydocHex: string) => void
@@ -35,6 +41,7 @@ function NoteCardImpl({
   isSelected,
   isEditing,
   peerEditors,
+  isCompact,
   onCommitGeometry,
   onTextSettled,
 }: Props) {
@@ -164,7 +171,7 @@ function NoteCardImpl({
           )}
         </div>
 
-        {isEditing ? (
+        {isCompact ? null : isEditing ? (
           <textarea
             ref={textareaRef}
             value={value}
@@ -191,9 +198,11 @@ function NoteCardImpl({
           body && <p className="mt-3 whitespace-pre-wrap break-words text-sm text-ink">{body}</p>
         )}
 
-        <p className="mt-[14px] text-2xs text-ink-tertiary">
-          {relativeTime(card.updated_at)} · {authorName}
-        </p>
+        {!isCompact && (
+          <p className="mt-[14px] text-2xs text-ink-tertiary">
+            {relativeTime(card.updated_at)} · {authorName}
+          </p>
+        )}
       </div>
 
       {hasPeerEditors && (
@@ -228,6 +237,7 @@ export const NoteCard = memo(NoteCardImpl, (a, b) => {
     a.authorName === b.authorName &&
     a.isSelected === b.isSelected &&
     a.isEditing === b.isEditing &&
+    a.isCompact === b.isCompact &&
     a.peerEditors === b.peerEditors &&
     a.onCommitGeometry === b.onCommitGeometry &&
     a.onTextSettled === b.onTextSettled

@@ -238,7 +238,13 @@ background-position: 8px 8px;
 
 `--dot: #E0DBD2` (light) / `#302E2B` (dark). Kontras 1.30 di light, 1.298 di dark — cukup terlihat untuk orientasi, jauh di bawah ambang yang membuatnya bersaing dengan konten.
 
-Dot grid fungsional, bukan dekoratif: memberi referensi spasial saat pan (tanpa itu kanvas kosong terasa tidak bergerak), mengonfirmasi snap 8px, dan memberi rasa ruang tak terbatas tanpa border.
+Dot grid fungsional, bukan dekoratif: memberi referensi spasial saat pan (tanpa itu kanvas kosong terasa tidak bergerak) dan mengonfirmasi snap 8px.
+
+**Revisi — kanvas tidak lagi tak terbatas.** Versi sebelumnya menyebut "rasa ruang tak terbatas tanpa border" sebagai fungsi ketiga dot grid. Board sekarang berukuran tetap (`BOARD_W` × `BOARD_H` di `src/store/canvasStore.ts`, kini 4000×3000) dan pan di-clamp ke tepinya.
+
+Alasannya: bidang tak terbatas tidak memberi apa pun untuk berorientasi. Pan cukup jauh dan tiap layar terlihat sama, tanpa petunjuk arah pulang. Batas yang terlihat mengubah "aku tersesat" jadi "aku di pojok kanan bawah".
+
+Konsekuensi implementasi: dot grid pindah ke dalam world layer, bukan screen-space. Grid jadi ter-clip sendiri ke tepi board, `background-size` dalam satuan world sehingga skalanya ditangani transform layer, dan radius dot dibagi zoom supaya tetap konstan di layar. Pan tetap satu transform di satu elemen.
 
 **Spacing 24px, bukan 8px.** Snap tetap 8px, tapi dot tiap 8px menghasilkan 9x lebih banyak titik dan terbaca sebagai bidang abu-abu, bukan grid. 24px = tiap 3 langkah snap.
 

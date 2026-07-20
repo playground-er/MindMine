@@ -140,7 +140,13 @@ Semua tipe lain lewat ⌘K, atau paste:
 - Paste image → upload ke Supabase storage, jadi image card
 - Paste teks panjang → note card
 
-Tidak ada toolbar tipe-kartu yang permanen di layar. Itu keputusan yang disengaja — toolbar mengambil ruang dan menambah noise visual di setiap sesi, padahal cuma dipakai di awal.
+**Revisi.** Versi sebelumnya menolak toolbar permanen dengan alasan memakan ruang dan menambah noise di tiap sesi. Yang menggantikannya: **floating navbar ala Figma** di bawah-tengah, berisi tool tipe kartu plus kontrol kanvas (zoom) dalam satu bar.
+
+Alasan perubahannya bukan bahwa keberatan lama salah, tapi bahwa keberatan itu menyasar toolbar sidebar yang menempel permanen di tepi layar dan mengklaim ruang tetap. Bar mengambang di bawah-tengah tidak memotong kanvas, dan ⌘K tetap jalur tercepat bagi yang hafal.
+
+Kalau tool tidak muat, yang **paling jarang dipakai** dilipat ke overflow `⋯` yang bisa di-expand — bukan bar yang melebar tanpa batas.
+
+Risiko yang disadari: ini melemahkan alasan ⌘K ada, dan membuka pintu bagi permintaan "tambah satu tombol lagi". Penahannya tetap aturan 17 — tidak ada tipe kartu ke-6.
 
 ### List view
 Toggle di header board. Menampilkan kartu yang sama sebagai outline vertikal, urut berdasarkan posisi Y lalu X (jadi urutan visual atas-ke-bawah tetap terasa masuk akal). Todo card menampilkan progress. Board card bisa di-expand inline.

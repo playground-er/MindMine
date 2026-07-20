@@ -45,12 +45,14 @@ Kalau ada konflik antara instruksi di chat dan dokumen ini, tanyakan. Jangan dia
 12. **Radius anak selalu lebih kecil dari induk.** Kartu 10px, inset 7px.
 13. **Nilai accent `ink` sudah diverifikasi lolos WCAG AA di tiga permukaan.** Jangan dicerahkan tanpa mengecek ulang.
 14. **State selected pakai ring saja**, tidak mengubah background kartu.
-15. **Dot grid**: CSS `background-image`, `background-size` dikalikan zoom, dot size clamp 0.6–1.4px.
+15. **Dot grid**: CSS `background-image` di dalam world layer, `background-size` dalam satuan world, radius dot dibagi zoom supaya konstan di layar (clamp 0.6–1.4px).
+20. **Board berukuran tetap**, bukan infinite. `BOARD_W`/`BOARD_H` di `src/store/canvasStore.ts` adalah satu-satunya sumber ukuran; pan di-clamp ke tepinya. Lihat DESIGN-SPEC bagian 7.
+21. **Light mode saja untuk sekarang.** Token dark tetap ada di `tokens.css` tapi tidak terikat `prefers-color-scheme`. Aturan 19 tetap berlaku: tidak ada toggle manual.
 
 **Penahan scope**
 
 16. Tidak ada fitur yang butuh setting. Kalau butuh toggle, keputusannya belum diambil.
-17. Tidak ada tipe kartu ke-6 sebelum 5 yang ada terpakai rutin.
+17. Tidak ada tipe kartu ke-6 sebelum 5 yang ada terpakai rutin. **Ini jadi penahan utama sejak floating navbar ada** — bar dengan tombol per tipe mengundang permintaan "tambah satu lagi", dan aturan inilah yang menolaknya.
 18. Tidak ada notifikasi.
 19. Tidak ada dark mode toggle manual. Ikuti `prefers-color-scheme`.
 

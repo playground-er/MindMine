@@ -5,6 +5,33 @@ import type { Point, Viewport } from '../types/canvas'
 export const ZOOM_MIN = 0.25
 export const ZOOM_MAX = 2
 
+/**
+ * The board is finite.
+ *
+ * DESIGN-SPEC section 7 originally called for "rasa ruang tak terbatas tanpa
+ * border", but an unbounded plane gives nothing to orient against: pan far
+ * enough and every screen looks identical with no way back. These numbers are
+ * the one knob for how large the board feels — change them here, nothing else
+ * hard-codes an extent.
+ */
+export const BOARD_W = 4000
+export const BOARD_H = 3000
+
+/**
+ * Keeps the board covering the viewport, or centred when it is smaller than
+ * the viewport (which happens once you zoom far enough out).
+ */
+function clampViewport(viewport: Viewport, viewW: number, viewH: number): Viewport {
+  const scaledW = BOARD_W * viewport.zoom
+  const scaledH = BOARD_H * viewport.zoom
+
+  const x = scaledW <= viewW ? (viewW - scaledW) / 2 : Math.min(0, Math.max(viewW - scaledW, viewport.x))
+  const y = scaledH <= viewH ? (viewH - scaledH) / 2 : Math.min(0, Math.max(viewH - scaledH, viewport.y))
+
+  if (x === viewport.x && y === viewport.y) return viewport
+  return { ...viewport, x, y }
+}
+
 /** Viewport lives in localStorage, never on the server — it is per-person. */
 const STORAGE_KEY = 'mindmine:viewport'
 
@@ -40,7 +67,10 @@ interface CanvasState {
   viewport: Viewport
   /** True while space is held or a pan drag is in flight — drives the cursor. */
   isPanning: boolean
+  /** Viewport pixel size, needed to clamp pan against the board bounds. */
+  viewSize: { w: number; h: number }
 
+  setViewSize: (w: number, h: number) => void
   panBy: (dx: number, dy: number) => void
   /** Zoom by a multiplier while keeping `origin` (screen coords) fixed. */
   zoomBy: (factor: number, origin: Point) => void
@@ -69,19 +99,50 @@ function anchoredZoom(viewport: Viewport, nextZoom: number, origin: Point): View
 export const useCanvasStore = create<CanvasState>((set) => ({
   viewport: readStoredViewport(),
   isPanning: false,
+  viewSize: { w: window.innerWidth, h: window.innerHeight },
+
+  setViewSize: (w, h) =>
+    set((state) => ({
+      viewSize: { w, h },
+      // Resizing smaller can leave the board off-screen; re-clamp immediately.
+      viewport: clampViewport(state.viewport, w, h),
+    })),
 
   panBy: (dx, dy) =>
     set((state) => ({
-      viewport: { ...state.viewport, x: state.viewport.x + dx, y: state.viewport.y + dy },
+      viewport: clampViewport(
+        { ...state.viewport, x: state.viewport.x + dx, y: state.viewport.y + dy },
+        state.viewSize.w,
+        state.viewSize.h,
+      ),
     })),
 
   zoomBy: (factor, origin) =>
-    set((state) => ({ viewport: anchoredZoom(state.viewport, state.viewport.zoom * factor, origin) })),
+    set((state) => ({
+      viewport: clampViewport(
+        anchoredZoom(state.viewport, state.viewport.zoom * factor, origin),
+        state.viewSize.w,
+        state.viewSize.h,
+      ),
+    })),
 
   zoomTo: (zoom, origin) =>
-    set((state) => ({ viewport: anchoredZoom(state.viewport, zoom, origin) })),
+    set((state) => ({
+      viewport: clampViewport(
+        anchoredZoom(state.viewport, zoom, origin),
+        state.viewSize.w,
+        state.viewSize.h,
+      ),
+    })),
 
-  resetZoom: (origin) => set((state) => ({ viewport: anchoredZoom(state.viewport, 1, origin) })),
+  resetZoom: (origin) =>
+    set((state) => ({
+      viewport: clampViewport(
+        anchoredZoom(state.viewport, 1, origin),
+        state.viewSize.w,
+        state.viewSize.h,
+      ),
+    })),
 
   setPanning: (isPanning) => set({ isPanning }),
 }))

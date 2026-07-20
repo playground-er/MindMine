@@ -2,20 +2,13 @@ import { useEffect, useRef, type MutableRefObject, type ReactNode } from 'react'
 
 import { useCanvasGestures } from '../hooks/useCanvasGestures'
 import { screenToWorld } from '../lib/geometry'
-import { useCanvasStore } from '../store/canvasStore'
+import { BOARD_H, BOARD_W, useCanvasStore } from '../store/canvasStore'
 import type { Point, Viewport } from '../types/canvas'
-import { ZoomControl } from './ZoomControl'
 
-/** Dot spacing at 100%. Snap is 8px; the grid draws every third step. */
+/** Dot spacing in world units. Snap is 8px; the grid draws every third step. */
 const GRID_BASE = 24
 
-/**
- * The grid layer is inset past the viewport on all sides so that translating
- * it by up to one full gap never exposes an edge. Must exceed GRID_BASE *
- * ZOOM_MAX (48px).
- */
-const GRID_BLEED = 64
-
+/** Clamped so dots neither vanish when zoomed out nor read as polka dots zoomed in. */
 function dotSize(zoom: number): number {
   return Math.min(1.4, Math.max(0.6, zoom))
 }
@@ -48,47 +41,54 @@ export function Canvas({
   onBackgroundClick,
 }: Props) {
   const viewportRef = useRef<HTMLDivElement>(null)
+  const worldRef = useRef<HTMLDivElement>(null)
+  const boardRef = useRef<HTMLDivElement>(null)
+
+  useCanvasGestures(viewportRef)
 
   useEffect(() => {
     if (!externalViewportRef) return
     externalViewportRef.current = viewportRef.current
   }, [externalViewportRef])
-  const gridRef = useRef<HTMLDivElement>(null)
-  const worldRef = useRef<HTMLDivElement>(null)
 
-  useCanvasGestures(viewportRef)
+  // Pan clamping needs to know how big the window is.
+  useEffect(() => {
+    const report = () => {
+      const el = viewportRef.current
+      if (!el) return
+      useCanvasStore.getState().setViewSize(el.clientWidth, el.clientHeight)
+    }
+    report()
+    window.addEventListener('resize', report)
+    return () => window.removeEventListener('resize', report)
+  }, [])
 
   /**
    * Viewport changes are written straight to the DOM instead of through React
-   * state. Pan fires every frame; re-rendering the tree that often is the
-   * thing that makes a canvas feel heavy. Both layers move by transform only,
-   * so pan stays on the compositor with no layout or paint.
+   * state. Pan fires every frame; re-rendering the tree that often is the thing
+   * that makes a canvas feel heavy.
+   *
+   * The dot grid rides the world layer rather than screen space, so panning is
+   * one transform on one element — no repaint at all — and the grid clips
+   * itself to the board edge for free. Its background-size is in world units,
+   * which the layer's own scale turns into the right on-screen spacing.
    */
   useEffect(() => {
     let lastZoom = Number.NaN
 
     const apply = ({ x, y, zoom }: Viewport) => {
       const world = worldRef.current
-      const grid = gridRef.current
-      if (!world || !grid) return
+      const board = boardRef.current
+      if (!world || !board) return
 
       world.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${zoom})`
 
-      const gap = GRID_BASE * zoom
-      // The pattern repeats every `gap`, so translating by the remainder is
-      // visually identical to translating by the full offset — and keeps the
-      // element inside its bleed area.
-      const tx = ((x % gap) + gap) % gap
-      const ty = ((y % gap) + gap) % gap
-      grid.style.transform = `translate3d(${tx}px, ${ty}px, 0)`
-
-      // Repaint-inducing properties are touched only when zoom actually moves.
       if (zoom !== lastZoom) {
         lastZoom = zoom
-        const r = dotSize(zoom)
-        grid.style.backgroundSize = `${gap}px ${gap}px`
-        grid.style.backgroundImage = `radial-gradient(circle, var(--dot) ${r}px, transparent ${r}px)`
-        grid.style.opacity = String(gridOpacity(zoom))
+        // Radius is divided by zoom so it stays constant on screen.
+        const r = dotSize(zoom) / zoom
+        board.style.backgroundImage = `radial-gradient(circle, var(--dot) ${r}px, transparent ${r}px)`
+        board.style.opacity = String(gridOpacity(zoom))
       }
     }
 
@@ -115,37 +115,42 @@ export function Canvas({
       role="application"
       aria-label="Papan MindMine"
       tabIndex={0}
-      className="relative h-full w-full touch-none overflow-hidden bg-canvas outline-none"
+      // Outside the board reads as a different surface, so the edge is legible
+      // without drawing attention to itself.
+      className="relative h-full w-full touch-none overflow-hidden bg-surface-inset outline-none"
       style={{ cursor: isPanning ? 'grabbing' : 'default' }}
-      // Cards and the zoom control stop propagation, so an event that reaches
-      // this handler came from empty canvas.
+      // Cards and chrome stop propagation, so an event that reaches this
+      // handler came from empty canvas.
       onPointerDown={() => onBackgroundClick?.()}
-      onDoubleClick={(e) => onCreateAt?.(toWorld(e.clientX, e.clientY))}
+      onDoubleClick={(e) => {
+        const world = toWorld(e.clientX, e.clientY)
+        if (world.x < 0 || world.y < 0 || world.x > BOARD_W || world.y > BOARD_H) return
+        onCreateAt?.(world)
+      }}
     >
-      <div
-        ref={gridRef}
-        aria-hidden="true"
-        className="pointer-events-none absolute will-change-transform"
-        style={{
-          top: -GRID_BLEED,
-          right: -GRID_BLEED,
-          bottom: -GRID_BLEED,
-          left: -GRID_BLEED,
-          backgroundPosition: '8px 8px',
-        }}
-      />
-
       <div
         ref={worldRef}
         className="absolute left-0 top-0 will-change-transform"
         style={{ transformOrigin: '0 0' }}
       >
+        <div
+          ref={boardRef}
+          aria-hidden="true"
+          className="absolute left-0 top-0 bg-canvas"
+          style={{
+            width: BOARD_W,
+            height: BOARD_H,
+            backgroundSize: `${GRID_BASE}px ${GRID_BASE}px`,
+            backgroundPosition: '8px 8px',
+            boxShadow: '0 0 0 1px var(--border)',
+          }}
+        />
+
         {children}
         {worldOverlay}
       </div>
 
       {overlay}
-      <ZoomControl />
     </div>
   )
 }

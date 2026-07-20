@@ -13,6 +13,7 @@ import {
 import { listMembers } from '../api/members'
 import { usePresence } from '../hooks/usePresence'
 import { useRealtimeCards } from '../hooks/useRealtimeCards'
+import { useVisibleCards } from '../hooks/useVisibleCards'
 import { screenToWorld, snap } from '../lib/geometry'
 import { TransportContext } from '../lib/transportContext'
 import { YDocTransport } from '../lib/ydocTransport'
@@ -23,6 +24,7 @@ import type { Point } from '../types/canvas'
 import type { Card, Member } from '../types/db'
 import { Canvas } from './Canvas'
 import { EmptyState } from './EmptyState'
+import { FloatingNavbar } from './FloatingNavbar'
 import { Header } from './Header'
 import { NoteCard } from './NoteCard'
 import { PresenceLayer } from './PresenceLayer'
@@ -81,6 +83,12 @@ export function BoardView({ member }: { member: Member }) {
   }, [])
 
   usePresence({ boardId: boardId ?? '', memberId: member.id, toWorld })
+
+  /** Navbar-created cards land in the middle of what you are looking at. */
+  const viewportCenterWorld = useCallback((): Point => {
+    const { viewport, viewSize } = useCanvasStore.getState()
+    return screenToWorld({ x: viewSize.w / 2, y: viewSize.h / 2 }, viewport)
+  }, [])
 
   const cardsKey = useMemo(() => ['cards', boardId] as const, [boardId])
 
@@ -206,14 +214,16 @@ export function BoardView({ member }: { member: Member }) {
     [patchCache, flushMutation],
   )
 
+  const cards = useMemo(() => cardsQuery.data ?? [], [cardsQuery.data])
+  const visibleCards = useVisibleCards(cards)
+  const isCompact = useCanvasStore((s) => s.viewport.zoom < 0.5)
+
   if (boardQuery.isError) {
     return <CenteredMessage text="Gagal memuat board. Muat ulang halaman." />
   }
   if (!boardId || cardsQuery.isLoading) {
     return <CenteredMessage text="Memuat…" />
   }
-
-  const cards = cardsQuery.data ?? []
 
   return (
     <TransportContext.Provider value={transport}>
@@ -225,6 +235,7 @@ export function BoardView({ member }: { member: Member }) {
         overlay={
           <>
             <Header title={boardQuery.data?.title ?? 'MindMine'} members={memberMap} />
+            <FloatingNavbar onCreate={() => createMutation.mutate(viewportCenterWorld())} />
             {cards.length === 0 && <EmptyState />}
             {pendingUndo && (
               <Toast
@@ -236,10 +247,11 @@ export function BoardView({ member }: { member: Member }) {
           </>
         }
       >
-        {cards.map((card) => (
+        {visibleCards.map((card) => (
           <NoteCard
             key={card.id}
             card={card}
+            isCompact={isCompact}
             authorName={memberMap.get(card.updated_by)?.name ?? '—'}
             isSelected={selectedId === card.id}
             isEditing={editingId === card.id}
