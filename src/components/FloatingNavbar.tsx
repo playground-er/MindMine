@@ -9,7 +9,7 @@ import {
   Plus,
   type LucideIcon,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 
 import { useZoomTween } from '../hooks/useZoomTween'
 import { useCanvasStore, ZOOM_MAX, ZOOM_MIN } from '../store/canvasStore'
@@ -20,6 +20,9 @@ const STEP = 1.25
 
 /** Tools beyond this collapse into the overflow, least-used first. */
 const MAX_INLINE = 4
+
+/** Pointer travel below this is a click; beyond it, a drag to the canvas. */
+const DRAG_THRESHOLD = 4
 
 interface Tool {
   type: CardType
@@ -39,14 +42,77 @@ const TOOLS: Tool[] = [
   { type: 'board', label: 'Board', icon: LayoutGrid, priority: 4, available: false },
 ]
 
+export interface ToolDrop {
+  clientX: number
+  clientY: number
+}
+
 interface Props {
-  onCreate: (type: CardType) => void
+  /** `at` is the drop point of a drag; null means a plain click (drop mid-view). */
+  onCreate: (type: CardType, at: ToolDrop | null) => void
+}
+
+interface ToolDrag {
+  tool: Tool
+  x: number
+  y: number
 }
 
 export function FloatingNavbar({ onCreate }: Props) {
   const zoom = useCanvasStore((s) => s.viewport.zoom)
   const tweenTo = useZoomTween()
   const [expanded, setExpanded] = useState(false)
+
+  /**
+   * Milanote's core affordance: tools are dragged onto the canvas and land
+   * where you drop them. A plain click still works and drops mid-viewport.
+   * The ghost chip is the drag feedback; Escape cancels.
+   */
+  const [drag, setDrag] = useState<ToolDrag | null>(null)
+  const dragRef = useRef<{ tool: Tool; startX: number; startY: number; moved: boolean } | null>(null)
+
+  const beginToolDrag = (tool: Tool) => (e: ReactPointerEvent) => {
+    if (e.button !== 0) return
+    e.preventDefault()
+    dragRef.current = { tool, startX: e.clientX, startY: e.clientY, moved: false }
+
+    const onMove = (ev: PointerEvent) => {
+      const s = dragRef.current
+      if (!s) return
+      if (
+        !s.moved &&
+        Math.abs(ev.clientX - s.startX) < DRAG_THRESHOLD &&
+        Math.abs(ev.clientY - s.startY) < DRAG_THRESHOLD
+      ) {
+        return
+      }
+      s.moved = true
+      setDrag({ tool: s.tool, x: ev.clientX, y: ev.clientY })
+    }
+
+    const finish = (ev: PointerEvent | null) => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('keydown', onKey)
+      const s = dragRef.current
+      dragRef.current = null
+      setDrag(null)
+      // A drag that started from the overflow menu never fires click, so the
+      // menu would stay open behind the new card.
+      setExpanded(false)
+      if (!s || !ev) return // ev null = cancelled with Escape
+      onCreate(s.tool.type, s.moved ? { clientX: ev.clientX, clientY: ev.clientY } : null)
+    }
+
+    const onUp = (ev: PointerEvent) => finish(ev)
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key === 'Escape') finish(null)
+    }
+
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('keydown', onKey)
+  }
 
   const usable = TOOLS.filter((t) => t.available).sort((a, b) => a.priority - b.priority)
   const inline = usable.slice(0, MAX_INLINE)
@@ -66,10 +132,7 @@ export function FloatingNavbar({ onCreate }: Props) {
             <button
               key={tool.type}
               type="button"
-              onClick={() => {
-                onCreate(tool.type)
-                setExpanded(false)
-              }}
+              onPointerDown={beginToolDrag(tool)}
               className="flex items-center gap-2 rounded-sm px-2 py-[6px] text-left text-sm text-ink-secondary transition-colors duration-[120ms] hover:bg-surface-inset hover:text-ink"
             >
               <Icon icon={tool.icon} size={16} />
@@ -84,10 +147,10 @@ export function FloatingNavbar({ onCreate }: Props) {
           <button
             key={tool.type}
             type="button"
-            title={tool.label}
-            aria-label={`Buat ${tool.label}`}
-            onClick={() => onCreate(tool.type)}
-            className="grid h-8 w-8 place-items-center rounded-sm text-ink-secondary transition-colors duration-[120ms] hover:bg-surface-inset hover:text-ink"
+            title={`${tool.label} — klik, atau seret ke kanvas`}
+            aria-label={`Buat ${tool.label}. Klik, atau seret ke posisi di kanvas.`}
+            onPointerDown={beginToolDrag(tool)}
+            className="grid h-8 w-8 cursor-grab place-items-center rounded-sm text-ink-secondary transition-colors duration-[120ms] hover:bg-surface-inset hover:text-ink"
           >
             <Icon icon={tool.icon} size={18} />
           </button>
@@ -137,6 +200,18 @@ export function FloatingNavbar({ onCreate }: Props) {
           <Icon icon={Plus} size={16} />
         </button>
       </div>
+
+      {/* Drag ghost — fixed so it rides the pointer across the whole viewport. */}
+      {drag && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none fixed z-50 flex items-center gap-2 rounded-md bg-surface px-3 py-2 text-sm text-ink shadow-drag"
+          style={{ left: drag.x, top: drag.y, transform: 'translate(-50%, -120%)' }}
+        >
+          <Icon icon={drag.tool.icon} size={16} />
+          {drag.tool.label}
+        </div>
+      )}
     </div>
   )
 }

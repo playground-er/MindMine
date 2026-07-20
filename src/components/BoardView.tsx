@@ -21,14 +21,14 @@ import { fetchLinkMeta, isProbablyUrl } from '../lib/linkMeta'
 import { TransportContext } from '../lib/transportContext'
 import { YDocTransport } from '../lib/ydocTransport'
 import { useBoardStore } from '../store/boardStore'
-import { useCanvasStore } from '../store/canvasStore'
+import { BOARD_H, BOARD_W, useCanvasStore } from '../store/canvasStore'
 import { usePresenceStore } from '../store/presenceStore'
 import type { Point } from '../types/canvas'
 import type { Card, CardType, Member } from '../types/db'
 import { Canvas } from './Canvas'
 import { CardView } from './CardView'
 import { EmptyState } from './EmptyState'
-import { FloatingNavbar } from './FloatingNavbar'
+import { FloatingNavbar, type ToolDrop } from './FloatingNavbar'
 import { Header } from './Header'
 import { PresenceLayer } from './PresenceLayer'
 import { Toast } from './Toast'
@@ -108,6 +108,18 @@ export function BoardView({ member }: { member: Member }) {
     return screenToWorld({ x: viewSize.w / 2, y: viewSize.h / 2 }, viewport)
   }, [])
 
+  /**
+   * Every creation point funnels through this. Zoomed out past the board's
+   * edge, the viewport centre (and tool drops) can lie outside the board —
+   * a card created there is invisible and looks like data loss.
+   */
+  const clampToBoard = useCallback((world: Point): Point => {
+    return {
+      x: Math.min(Math.max(world.x, 16), BOARD_W - 296),
+      y: Math.min(Math.max(world.y, 16), BOARD_H - 176),
+    }
+  }, [])
+
   const cardsKey = useMemo(() => ['cards', boardId] as const, [boardId])
 
   /** Applies a local edit to the cached list so the UI never waits on the server. */
@@ -175,32 +187,46 @@ export function BoardView({ member }: { member: Member }) {
   /** Reads dimensions, uploads to the private bucket, then creates the card. */
   const createImageFromFile = useCallback(
     async (file: File, world: Point) => {
-      const uploaded = await uploadCardImage(file)
-      createMutation.mutate({
-        type: 'image',
-        world,
-        w: 320,
-        content: {
-          url: uploaded.path,
-          alt: file.name.replace(/\.[^.]+$/, ''),
-          natural_w: uploaded.natural_w,
-          natural_h: uploaded.natural_h,
-        },
-      })
+      try {
+        const uploaded = await uploadCardImage(file)
+        createMutation.mutate({
+          type: 'image',
+          world,
+          w: 320,
+          content: {
+            url: uploaded.path,
+            alt: file.name.replace(/\.[^.]+$/, ''),
+            natural_w: uploaded.natural_w,
+            natural_h: uploaded.natural_h,
+          },
+        })
+      } catch (error) {
+        // A failed upload (RLS, size, corrupt file) must not surface as an
+        // unhandled rejection; the console line is the diagnostic for now.
+        console.error('Upload gambar gagal:', error)
+      }
     },
     [createMutation],
   )
 
-  /** Navbar entry point. */
+  /**
+   * The image tool opens a file picker, so the drop position has to survive
+   * until a file is actually chosen.
+   */
+  const pendingImageDropRef = useRef<Point | null>(null)
+
+  /** Navbar entry point — `at` is a drag's drop point, null a plain click. */
   const handleCreate = useCallback(
-    (type: CardType) => {
+    (type: CardType, at: ToolDrop | null) => {
+      const world = clampToBoard(at ? toWorld(at.clientX, at.clientY) : viewportCenterWorld())
       if (type === 'image') {
+        pendingImageDropRef.current = world
         fileInputRef.current?.click()
         return
       }
-      createMutation.mutate({ type, world: viewportCenterWorld(), content: initialContent(type) })
+      createMutation.mutate({ type, world, content: initialContent(type) })
     },
-    [createMutation, viewportCenterWorld],
+    [createMutation, viewportCenterWorld, clampToBoard, toWorld],
   )
 
   /**
@@ -221,7 +247,7 @@ export function BoardView({ member }: { member: Member }) {
       const file = Array.from(e.clipboardData?.files ?? []).find((f) => f.type.startsWith('image/'))
       if (file) {
         e.preventDefault()
-        void createImageFromFile(file, viewportCenterWorld())
+        void createImageFromFile(file, clampToBoard(viewportCenterWorld()))
         return
       }
 
@@ -231,7 +257,7 @@ export function BoardView({ member }: { member: Member }) {
 
       if (isProbablyUrl(text)) {
         createMutation.mutate(
-          { type: 'link', world: viewportCenterWorld(), content: { url: text } },
+          { type: 'link', world: clampToBoard(viewportCenterWorld()), content: { url: text } },
           {
             onSuccess: (card) => {
               void fetchLinkMeta(text).then((meta) => {
@@ -244,12 +270,16 @@ export function BoardView({ member }: { member: Member }) {
         return
       }
 
-      createMutation.mutate({ type: 'note', world: viewportCenterWorld(), content: { text } })
+      createMutation.mutate({
+        type: 'note',
+        world: clampToBoard(viewportCenterWorld()),
+        content: { text },
+      })
     }
 
     window.addEventListener('paste', onPaste)
     return () => window.removeEventListener('paste', onPaste)
-  }, [createMutation, contentMutation, createImageFromFile, patchCache, viewportCenterWorld])
+  }, [createMutation, contentMutation, createImageFromFile, patchCache, viewportCenterWorld, clampToBoard])
 
   // The undo offer expires on its own; the card stays recoverable for 30 days.
   useEffect(() => {
@@ -260,6 +290,12 @@ export function BoardView({ member }: { member: Member }) {
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      // Escape steps out: editor first (cards handle that), then selection.
+      if (e.key === 'Escape' && !editingId) {
+        select(null)
+        return
+      }
+
       if (e.key !== 'Backspace' && e.key !== 'Delete') return
       if (!selectedId || editingId) return
 
@@ -367,7 +403,9 @@ export function BoardView({ member }: { member: Member }) {
               onChange={(e) => {
                 const file = e.target.files?.[0]
                 e.target.value = ''
-                if (file) void createImageFromFile(file, viewportCenterWorld())
+                const world = pendingImageDropRef.current ?? clampToBoard(viewportCenterWorld())
+                pendingImageDropRef.current = null
+                if (file) void createImageFromFile(file, world)
               }}
             />
           </>

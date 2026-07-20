@@ -148,6 +148,8 @@ Alasan perubahannya bukan bahwa keberatan lama salah, tapi bahwa keberatan itu m
 
 Kalau tool tidak muat, yang **paling jarang dipakai** dilipat ke overflow `⋯` yang bisa di-expand — bukan bar yang melebar tanpa batas.
 
+Cara pakai tool mengikuti Milanote: **seret dari bar ke kanvas**, kartu jatuh di titik lepasnya. Klik biasa tetap jalan dan menjatuhkan kartu di tengah viewport. Semua titik pembuatan (drop, klik, paste, double-click) di-clamp ke dalam batas board — kartu yang lahir di luar board tidak terlihat dan terasa seperti data hilang.
+
 Risiko yang disadari: ini melemahkan alasan ⌘K ada, dan membuka pintu bagi permintaan "tambah satu tombol lagi". Penahannya tetap aturan 17 — tidak ada tipe kartu ke-6.
 
 ### List view
