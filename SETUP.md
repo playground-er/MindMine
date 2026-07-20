@@ -84,17 +84,37 @@ Claude Code otomatis baca `CLAUDE.md`. Lalu kirim prompt Tahap 1 dari `docs/PROM
 
 Ini dilakukan **setelah** tahap 2 selesai (auth sudah jalan).
 
-Tiap orang login sekali lewat magic link. Setelah itu:
+Sengaja tidak ada UI invite. Untuk tim internal yang jarang berubah, membangunnya adalah pekerjaan yang tidak terbayar. Konsekuensinya: `member` diisi lewat SQL, dan baris di `auth.users` harus ada lebih dulu (`member.id` mereferensikannya).
 
-1. Dashboard → **Authentication** → **Users** → copy UUID orang tersebut
-2. **SQL Editor**:
+### 8a. Anggota pertama — dirimu sendiri
+
+Instance kosong tidak punya siapa-siapa, jadi bootstrap-nya lewat dashboard. **Tidak perlu login dulu.**
+
+1. Dashboard → **Authentication** → **Users** → **Add user** → **Create new user**
+2. Isi email, centang **Auto Confirm User**
+3. **SQL Editor**:
 
 ```sql
 insert into member (id, email, name)
-values ('uuid-dari-langkah-1', 'orang@email.com', 'Nama Orang');
+select id, email, 'Nama Kamu'
+from auth.users
+where email = 'email@kamu.com';
 ```
 
-Sengaja tidak ada UI invite. Untuk tim internal yang jarang berubah, membangunnya adalah pekerjaan yang tidak terbayar.
+Setelah itu buka aplikasi, masukkan email yang sama, dan magic link langsung membawamu ke kanvas.
+
+Password yang kamu isi di langkah 2 tidak dipakai — aplikasi hanya punya jalur magic link. Itu cuma cara tercepat membuat baris `auth.users`.
+
+### 8b. Anggota berikutnya
+
+Rekan tim akan login sendiri, jadi tidak perlu dibuatkan manual:
+
+1. Minta mereka buka aplikasi dan login sekali lewat magic link
+2. Mereka akan lihat layar "Belum terdaftar" — itu wajar
+3. Jalankan SQL yang sama seperti 8a, ganti email dan namanya
+4. Minta mereka reload
+
+SQL di atas mencari UUID-nya sendiri lewat email, jadi tidak ada UUID yang perlu dipindah tangan dari dashboard.
 
 ## 9. Deploy (nanti, setelah tahap 4)
 
