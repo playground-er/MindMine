@@ -14,8 +14,8 @@ export const ZOOM_MAX = 2
  * the one knob for how large the board feels — change them here, nothing else
  * hard-codes an extent.
  */
-export const BOARD_W = 4000
-export const BOARD_H = 3000
+export const BOARD_W = 2000
+export const BOARD_H = 1500
 
 /**
  * Keeps the board covering the viewport, or centred when it is smaller than

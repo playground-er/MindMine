@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react'
-import { useCallback, useEffect, useRef, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 
 import { useCardDrag } from '../hooks/useCardDrag'
 import type { Accent } from '../lib/accents'
@@ -26,6 +26,18 @@ export interface CardShellProps {
   onCommitGeometry: (id: string, next: { x: number; y: number; w: number }) => void
   /** Body, hidden in compact mode. */
   children?: ReactNode
+}
+
+/**
+ * Elements that own their own pointer interactions. A pointerdown that lands
+ * on one of these must not start a card drag — selecting text in a todo item
+ * would move the whole card — and a double-click there must not yank focus to
+ * the card title.
+ */
+const INTERACTIVE_SELECTOR = 'input, textarea, button, a, [contenteditable="true"]'
+
+function isInteractive(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest(INTERACTIVE_SELECTOR) !== null
 }
 
 /**
@@ -74,7 +86,20 @@ export function CardShell({
   }, [card.x, card.y])
 
   const hasPeerEditors = peerEditors.length > 0
-  const shadow = isDragging ? 'shadow-drag' : isSelected || isEditing ? 'shadow-hover' : 'shadow-card'
+
+  /**
+   * Ring and elevation live in ONE inline box-shadow. Splitting them — ring
+   * inline, elevation as a Tailwind class — silently drops the elevation,
+   * because inline style beats the class. Selecting on pointerdown then made
+   * every drag lose its shadow.
+   */
+  const [isHovered, setIsHovered] = useState(false)
+  const elevation = isDragging
+    ? 'var(--shadow-drag)'
+    : isSelected || isEditing || isHovered
+      ? 'var(--shadow-hover)'
+      : 'var(--shadow-card)'
+  const ring = isSelected || isEditing ? `0 0 0 1.5px ${accent.line}, ` : ''
 
   return (
     <div
@@ -89,24 +114,28 @@ export function CardShell({
         transform: `translate3d(${card.x}px, ${card.y}px, 0)`,
         width: card.w,
         opacity: isDragging ? 0.94 : 1,
-        // Ring via box-shadow so it composes with the elevation shadows.
-        boxShadow: isSelected || isEditing ? `0 0 0 1.5px ${accent.line}` : undefined,
+        boxShadow: `${ring}${elevation}`,
         // Dashed, and only an outline — nobody is ever blocked from a card.
         outline: hasPeerEditors ? `1.5px dashed ${accent.line}` : undefined,
         outlineOffset: hasPeerEditors ? '2px' : undefined,
       }}
-      className={`absolute left-0 top-0 flex rounded-md bg-surface ${shadow} transition-shadow duration-[120ms] hover:bg-surface-hover hover:shadow-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]`}
+      className="absolute left-0 top-0 flex rounded-md bg-surface transition-shadow duration-[120ms] hover:bg-surface-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]"
+      onPointerEnter={() => setIsHovered(true)}
+      onPointerLeave={() => setIsHovered(false)}
       onPointerDown={(e) => {
         // Unconditional: the canvas deselects on any pointerdown that reaches
         // it, so letting this through while editing would close the editor the
         // moment you clicked inside your own textarea.
         e.stopPropagation()
         select(card.id)
-        if (!isEditing) onMovePointerDown(e)
+        // Interactive children (todo inputs, checkboxes, links) own their
+        // pointer — starting a drag from them turns text selection into
+        // card movement.
+        if (!isEditing && !isInteractive(e.target)) onMovePointerDown(e)
       }}
       onDoubleClick={(e) => {
         e.stopPropagation()
-        beginEdit(card.id)
+        if (!isInteractive(e.target)) beginEdit(card.id)
       }}
     >
       {/* Accent strip: 2px, full height, square on the left edge. */}

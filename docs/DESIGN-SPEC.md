@@ -240,7 +240,7 @@ background-position: 8px 8px;
 
 Dot grid fungsional, bukan dekoratif: memberi referensi spasial saat pan (tanpa itu kanvas kosong terasa tidak bergerak) dan mengonfirmasi snap 8px.
 
-**Revisi — kanvas tidak lagi tak terbatas.** Versi sebelumnya menyebut "rasa ruang tak terbatas tanpa border" sebagai fungsi ketiga dot grid. Board sekarang berukuran tetap (`BOARD_W` × `BOARD_H` di `src/store/canvasStore.ts`, kini 4000×3000) dan pan di-clamp ke tepinya.
+**Revisi — kanvas tidak lagi tak terbatas.** Versi sebelumnya menyebut "rasa ruang tak terbatas tanpa border" sebagai fungsi ketiga dot grid. Board sekarang berukuran tetap (`BOARD_W` × `BOARD_H` di `src/store/canvasStore.ts`, kini 2000×1500 — dikecilkan dari 4000×3000 setelah terasa terlalu luas dipakai) dan pan di-clamp ke tepinya.
 
 Alasannya: bidang tak terbatas tidak memberi apa pun untuk berorientasi. Pan cukup jauh dan tiap layar terlihat sama, tanpa petunjuk arah pulang. Batas yang terlihat mengubah "aku tersesat" jadi "aku di pojok kanan bawah".
 
