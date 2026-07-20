@@ -62,8 +62,10 @@ export function ZoomControl() {
         opacity: isIdle ? 0.45 : 1,
       }}
       onPointerEnter={() => setIsIdle(false)}
-      // Reaching the canvas would deselect the current card and start a pan.
+      // stopPropagation covers React's deselect handler; data-no-pan covers the
+      // viewport's native pan listener, which fires earlier.
       onPointerDown={(e) => e.stopPropagation()}
+      data-no-pan=""
     >
       <button
         type="button"

@@ -5,6 +5,22 @@ import { useCanvasStore, ZOOM_MAX, ZOOM_MIN } from '../store/canvasStore'
 /** Trackpad pinch and ⌘+wheel both arrive as ctrlKey wheel events. */
 const ZOOM_SENSITIVITY = 0.01
 
+/**
+ * Elements that handle their own pointer gestures.
+ *
+ * Pan is bound with addEventListener on the viewport, so it fires during the
+ * native bubble phase — before React dispatches its synthetic handlers at the
+ * root. A card calling stopPropagation in its own onPointerDown is therefore
+ * already too late, and dragging a card would pan the board underneath it,
+ * which looks exactly like every card moving at once. The check has to happen
+ * here instead.
+ */
+const NO_PAN_SELECTOR = '[data-no-pan]'
+
+function isOwnGesture(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest(NO_PAN_SELECTOR) !== null
+}
+
 function isEditable(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false
   return (
@@ -79,9 +95,7 @@ export function useCanvasGestures(ref: RefObject<HTMLElement | null>): void {
 
     const onPointerDown = (e: PointerEvent) => {
       if (e.button !== 0 && e.button !== 1) return
-      // Once cards exist they will stop propagation; until then every press on
-      // the viewport is a press on empty canvas.
-      if (isEditable(e.target)) return
+      if (isEditable(e.target) || isOwnGesture(e.target)) return
 
       isDragging = true
       activePointerId = e.pointerId

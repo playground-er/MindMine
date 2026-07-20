@@ -6,6 +6,10 @@
  */
 
 :root {
+  /* Light only for now. Without this, form controls and scrollbars would
+   * still follow the OS and render dark against the cream surfaces. */
+  color-scheme: light;
+
   /* ---------------------------------------------------------------------
    * Surfaces — four levels
    * L0 canvas -> L1 card -> L2 inset block -> L3 raised block
@@ -111,56 +115,67 @@
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    /* Same ladder shape as light mode: L2 darker than L1, L3 rises again. */
-    --canvas: #1a1917;
-    --surface: #232220;
-    --surface-inset: #1e1d1b;
-    --surface-raised: #2a2825;
-    --surface-hover: #292724;
+/* ---------------------------------------------------------------------------
+ * Dark mode — parked, not deleted.
+ *
+ * These values are kept verbatim from DESIGN-SPEC.md, contrast ratios and all,
+ * but they no longer bind to `prefers-color-scheme`. The dot grid sits at 1.298
+ * against the dark canvas — matched to light mode on paper, but in practice it
+ * disappears on a dimmed screen, and the grid is load-bearing for orientation
+ * while panning rather than decoration.
+ *
+ * To bring it back, restore the `@media (prefers-color-scheme: dark)` wrapper.
+ * This selector is NOT a manual toggle and nothing in the UI sets the
+ * attribute — CLAUDE.md rule 19 still stands.
+ * ------------------------------------------------------------------------- */
+:root[data-theme='dark'] {
+  /* Same ladder shape as light mode: L2 darker than L1, L3 rises again. */
+  --canvas: #1a1917;
+  --surface: #232220;
+  --surface-inset: #1e1d1b;
+  --surface-raised: #2a2825;
+  --surface-hover: #292724;
 
-    --border: #322f2b;
-    --border-strong: #423e39;
+  --border: #322f2b;
+  --border-strong: #423e39;
 
-    --ink: #efebe4;
-    --ink-secondary: #a8a199;
-    --ink-tertiary: #7e7871;
-    --ink-muted: #5c5750;
+  --ink: #efebe4;
+  --ink-secondary: #a8a199;
+  --ink-tertiary: #7e7871;
+  --ink-muted: #5c5750;
 
-    --dot: #302e2b; /* 1.298 against canvas — matched to light mode */
+  --dot: #302e2b; /* 1.298 against canvas — matched to light mode */
 
-    --focus: #7da0d4;
+  --focus: #7da0d4;
 
-    /* Accent in dark mode: tint = 10% of ink over surface, line = 22%,
-     * ink lightened until >= 4.5:1. Values below are the lightened inks. */
-    --accent-note-tint: rgba(196, 168, 120, 0.1);
-    --accent-note-line: rgba(196, 168, 120, 0.22);
-    --accent-note-ink: #c4a878;
+  /* Accent in dark mode: tint = 10% of ink over surface, line = 22%,
+   * ink lightened until >= 4.5:1. Values below are the lightened inks. */
+  --accent-note-tint: rgba(196, 168, 120, 0.1);
+  --accent-note-line: rgba(196, 168, 120, 0.22);
+  --accent-note-ink: #c4a878;
 
-    --accent-todo-tint: rgba(140, 179, 149, 0.1);
-    --accent-todo-line: rgba(140, 179, 149, 0.22);
-    --accent-todo-ink: #8cb395;
+  --accent-todo-tint: rgba(140, 179, 149, 0.1);
+  --accent-todo-line: rgba(140, 179, 149, 0.22);
+  --accent-todo-ink: #8cb395;
 
-    --accent-image-tint: rgba(207, 150, 134, 0.1);
-    --accent-image-line: rgba(207, 150, 134, 0.22);
-    --accent-image-ink: #cf9686;
+  --accent-image-tint: rgba(207, 150, 134, 0.1);
+  --accent-image-line: rgba(207, 150, 134, 0.22);
+  --accent-image-ink: #cf9686;
 
-    --accent-link-tint: rgba(141, 168, 196, 0.1);
-    --accent-link-line: rgba(141, 168, 196, 0.22);
-    --accent-link-ink: #8da8c4;
+  --accent-link-tint: rgba(141, 168, 196, 0.1);
+  --accent-link-line: rgba(141, 168, 196, 0.22);
+  --accent-link-ink: #8da8c4;
 
-    --accent-board-tint: rgba(184, 150, 189, 0.1);
-    --accent-board-line: rgba(184, 150, 189, 0.22);
-    --accent-board-ink: #b896bd;
+  --accent-board-tint: rgba(184, 150, 189, 0.1);
+  --accent-board-line: rgba(184, 150, 189, 0.22);
+  --accent-board-ink: #b896bd;
 
-    /* Shadows are near-invisible on dark surfaces; separation comes from
-     * the surface ladder instead. Kept for drag/float only. */
-    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.2), 0 4px 12px rgba(0, 0, 0, 0.18);
-    --shadow-hover: 0 2px 4px rgba(0, 0, 0, 0.24), 0 8px 20px rgba(0, 0, 0, 0.22);
-    --shadow-drag: 0 12px 32px rgba(0, 0, 0, 0.4), 0 3px 8px rgba(0, 0, 0, 0.24);
-    --shadow-float: 0 16px 40px rgba(0, 0, 0, 0.36), 0 3px 8px rgba(0, 0, 0, 0.22);
-  }
+  /* Shadows are near-invisible on dark surfaces; separation comes from
+   * the surface ladder instead. Kept for drag/float only. */
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.2), 0 4px 12px rgba(0, 0, 0, 0.18);
+  --shadow-hover: 0 2px 4px rgba(0, 0, 0, 0.24), 0 8px 20px rgba(0, 0, 0, 0.22);
+  --shadow-drag: 0 12px 32px rgba(0, 0, 0, 0.4), 0 3px 8px rgba(0, 0, 0, 0.24);
+  --shadow-float: 0 16px 40px rgba(0, 0, 0, 0.36), 0 3px 8px rgba(0, 0, 0, 0.22);
 }
 
 @media (prefers-reduced-motion: reduce) {

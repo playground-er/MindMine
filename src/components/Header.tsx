@@ -19,7 +19,7 @@ export function Header({ title, members }: Props) {
   const present = online.map((id) => members.get(id)).filter((m): m is Member => Boolean(m))
 
   return (
-    <header className="absolute inset-x-0 top-0 z-10">
+    <header className="absolute inset-x-0 top-0 z-10" data-no-pan="">
       <div
         className="flex h-12 items-center justify-between px-4"
         style={{

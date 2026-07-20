@@ -120,6 +120,9 @@ function NoteCardImpl({
       role="article"
       aria-label={firstLine || 'Catatan kosong'}
       tabIndex={0}
+      // Keeps the viewport's native pan handler off this subtree — see
+      // NO_PAN_SELECTOR in useCanvasGestures.
+      data-no-pan=""
       style={{
         transform: `translate3d(${card.x}px, ${card.y}px, 0)`,
         width: card.w,
@@ -130,6 +133,10 @@ function NoteCardImpl({
       }}
       className={`absolute left-0 top-0 flex rounded-md bg-surface ${shadow} ${ring} transition-shadow duration-[120ms] hover:bg-surface-hover hover:shadow-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]`}
       onPointerDown={(e) => {
+        // Unconditional: the canvas deselects on any pointerdown that reaches
+        // it, so letting this through while editing would close the editor the
+        // moment you clicked inside your own textarea.
+        e.stopPropagation()
         select(card.id)
         if (!isEditing) onMovePointerDown(e)
       }}
