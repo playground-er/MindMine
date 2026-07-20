@@ -35,6 +35,8 @@ export interface Card {
   h: number | null
   z: number
   content: NoteContent | Record<string, unknown>
+  /** Yjs state, arriving from PostgREST as a `\x…` hex string. Null before Tahap 3. */
+  ydoc: string | null
   accent: string | null
   created_by: string
   updated_by: string

@@ -68,6 +68,28 @@ export async function updateCardText(id: string, text: string, memberId: string)
   if (error) throw error
 }
 
+/**
+ * Flushes a settled Yjs document.
+ *
+ * Both columns are written together on purpose: `ydoc` is the authoritative
+ * CRDT state, `content.text` is the plain copy that search and list view read.
+ * PRD section 5 calls the duplication deliberate — searching inside CRDT binary
+ * is expensive, and list view never needs character-level resolution.
+ */
+export async function flushCardDoc(
+  id: string,
+  ydocHex: string,
+  text: string,
+  memberId: string,
+): Promise<void> {
+  const { error } = await getSupabase()
+    .from('card')
+    .update({ ydoc: ydocHex, content: { text }, updated_by: memberId })
+    .eq('id', id)
+
+  if (error) throw error
+}
+
 /** Soft delete — the row stays for 30 days so the mistake stays recoverable. */
 export async function softDeleteCard(id: string, memberId: string): Promise<void> {
   const { error } = await getSupabase()

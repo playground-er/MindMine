@@ -1,26 +1,37 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { fetchOrCreateRootBoard } from '../api/board'
 import {
   createNoteCard,
+  flushCardDoc,
   listCards,
   restoreCard,
   softDeleteCard,
   updateCardGeometry,
-  updateCardText,
 } from '../api/cards'
 import { listMembers } from '../api/members'
-import { snap } from '../lib/geometry'
+import { usePresence } from '../hooks/usePresence'
+import { useRealtimeCards } from '../hooks/useRealtimeCards'
+import { screenToWorld, snap } from '../lib/geometry'
+import { TransportContext } from '../lib/transportContext'
+import { YDocTransport } from '../lib/ydocTransport'
 import { useBoardStore } from '../store/boardStore'
+import { useCanvasStore } from '../store/canvasStore'
+import { usePresenceStore } from '../store/presenceStore'
 import type { Point } from '../types/canvas'
 import type { Card, Member } from '../types/db'
 import { Canvas } from './Canvas'
 import { EmptyState } from './EmptyState'
+import { Header } from './Header'
 import { NoteCard } from './NoteCard'
+import { PresenceLayer } from './PresenceLayer'
 import { Toast } from './Toast'
 
 const UNDO_WINDOW_MS = 5000
+
+/** Module scope so cards without peer editors keep a stable prop identity. */
+const NO_EDITORS: Member[] = []
 
 export function BoardView({ member }: { member: Member }) {
   const queryClient = useQueryClient()
@@ -45,6 +56,31 @@ export function BoardView({ member }: { member: Member }) {
     queryFn: () => listCards(boardId!),
     enabled: Boolean(boardId),
   })
+
+  useRealtimeCards(boardId)
+
+  // One transport per board, torn down when the board changes.
+  const [transport, setTransport] = useState<YDocTransport | null>(null)
+  useEffect(() => {
+    if (!boardId) return
+    const next = new YDocTransport(boardId)
+    setTransport(next)
+    return () => {
+      next.destroy()
+      setTransport(null)
+    }
+  }, [boardId])
+
+  const viewportElRef = useRef<HTMLElement | null>(null)
+  const toWorld = useCallback((clientX: number, clientY: number): Point => {
+    const rect = viewportElRef.current?.getBoundingClientRect()
+    return screenToWorld(
+      { x: clientX - (rect?.left ?? 0), y: clientY - (rect?.top ?? 0) },
+      useCanvasStore.getState().viewport,
+    )
+  }, [])
+
+  usePresence({ boardId: boardId ?? '', memberId: member.id, toWorld })
 
   const cardsKey = useMemo(() => ['cards', boardId] as const, [boardId])
 
@@ -79,10 +115,9 @@ export function BoardView({ member }: { member: Member }) {
     onError: () => void queryClient.invalidateQueries({ queryKey: cardsKey }),
   })
 
-  const textMutation = useMutation({
-    mutationFn: ({ id, text }: { id: string; text: string }) =>
-      updateCardText(id, text, member.id),
-    onError: () => void queryClient.invalidateQueries({ queryKey: cardsKey }),
+  const flushMutation = useMutation({
+    mutationFn: ({ id, text, ydocHex }: { id: string; text: string; ydocHex: string }) =>
+      flushCardDoc(id, ydocHex, text, member.id),
   })
 
   const deleteMutation = useMutation({
@@ -114,7 +149,10 @@ export function BoardView({ member }: { member: Member }) {
       if (!selectedId || editingId) return
 
       const target = e.target
-      if (target instanceof HTMLElement && (target.isContentEditable || target.tagName === 'TEXTAREA')) {
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable || target.tagName === 'TEXTAREA')
+      ) {
         return
       }
 
@@ -127,17 +165,31 @@ export function BoardView({ member }: { member: Member }) {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [selectedId, editingId, deleteMutation, select])
 
-  const memberNames = useMemo(() => {
-    const map = new Map<string, string>()
-    for (const m of membersQuery.data ?? []) map.set(m.id, m.name)
+  const memberMap = useMemo(() => {
+    const map = new Map<string, Member>()
+    for (const m of membersQuery.data ?? []) map.set(m.id, m)
     return map
   }, [membersQuery.data])
 
   /**
-   * These take the card id as an argument rather than being built per card.
-   * A closure created inside the map would be a new function identity on every
-   * render, and NoteCard's memo comparator would never hold.
+   * Who is inside which card, derived once per presence change rather than
+   * inside each card. Reading the presence store from NoteCard would couple
+   * every card to cursor traffic — the coupling PRD section 11 warns about.
    */
+  const peers = usePresenceStore((s) => s.peers)
+  const editorsByCard = useMemo(() => {
+    const map = new Map<string, Member[]>()
+    for (const peer of Object.values(peers)) {
+      if (!peer.editingCardId) continue
+      const m = memberMap.get(peer.memberId)
+      if (!m) continue
+      const list = map.get(peer.editingCardId)
+      if (list) list.push(m)
+      else map.set(peer.editingCardId, [m])
+    }
+    return map
+  }, [peers, memberMap])
+
   const commitGeometry = useCallback(
     (id: string, next: { x: number; y: number; w: number }) => {
       patchCache(id, next)
@@ -146,12 +198,12 @@ export function BoardView({ member }: { member: Member }) {
     [patchCache, geometryMutation],
   )
 
-  const commitText = useCallback(
-    (id: string, text: string) => {
+  const onTextSettled = useCallback(
+    (id: string, text: string, ydocHex: string) => {
       patchCache(id, { content: { text } })
-      textMutation.mutate({ id, text })
+      flushMutation.mutate({ id, text, ydocHex })
     },
-    [patchCache, textMutation],
+    [patchCache, flushMutation],
   )
 
   if (boardQuery.isError) {
@@ -164,34 +216,40 @@ export function BoardView({ member }: { member: Member }) {
   const cards = cardsQuery.data ?? []
 
   return (
-    <Canvas
-      onCreateAt={(world) => createMutation.mutate(world)}
-      onBackgroundClick={() => select(null)}
-      overlay={
-        <>
-          {cards.length === 0 && <EmptyState />}
-          {pendingUndo && (
-            <Toast
-              message="Kartu dihapus."
-              actionLabel="Urungkan"
-              onAction={() => restoreMutation.mutate(pendingUndo)}
-            />
-          )}
-        </>
-      }
-    >
-      {cards.map((card) => (
-        <NoteCard
-          key={card.id}
-          card={card}
-          authorName={memberNames.get(card.updated_by) ?? '—'}
-          isSelected={selectedId === card.id}
-          isEditing={editingId === card.id}
-          onCommitGeometry={commitGeometry}
-          onCommitText={commitText}
-        />
-      ))}
-    </Canvas>
+    <TransportContext.Provider value={transport}>
+      <Canvas
+        viewportRef={viewportElRef}
+        onCreateAt={(world) => createMutation.mutate(world)}
+        onBackgroundClick={() => select(null)}
+        worldOverlay={<PresenceLayer members={memberMap} />}
+        overlay={
+          <>
+            <Header title={boardQuery.data?.title ?? 'MindMine'} members={memberMap} />
+            {cards.length === 0 && <EmptyState />}
+            {pendingUndo && (
+              <Toast
+                message="Kartu dihapus."
+                actionLabel="Urungkan"
+                onAction={() => restoreMutation.mutate(pendingUndo)}
+              />
+            )}
+          </>
+        }
+      >
+        {cards.map((card) => (
+          <NoteCard
+            key={card.id}
+            card={card}
+            authorName={memberMap.get(card.updated_by)?.name ?? '—'}
+            isSelected={selectedId === card.id}
+            isEditing={editingId === card.id}
+            peerEditors={editorsByCard.get(card.id) ?? NO_EDITORS}
+            onCommitGeometry={commitGeometry}
+            onTextSettled={onTextSettled}
+          />
+        ))}
+      </Canvas>
+    </TransportContext.Provider>
   )
 }
 

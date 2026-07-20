@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useRef, type MutableRefObject, type ReactNode } from 'react'
 
 import { useCanvasGestures } from '../hooks/useCanvasGestures'
 import { screenToWorld } from '../lib/geometry'
@@ -29,13 +29,30 @@ function gridOpacity(zoom: number): number {
 
 interface Props {
   children?: ReactNode
+  /** Screen-space chrome: header, toasts, empty state. */
   overlay?: ReactNode
+  /** Lives inside the transformed world layer — peer cursors, snap guides. */
+  worldOverlay?: ReactNode
+  /** Mirrors the viewport element out, so callers can map client to world. */
+  viewportRef?: MutableRefObject<HTMLElement | null>
   onCreateAt?: (world: Point) => void
   onBackgroundClick?: () => void
 }
 
-export function Canvas({ children, overlay, onCreateAt, onBackgroundClick }: Props) {
+export function Canvas({
+  children,
+  overlay,
+  worldOverlay,
+  viewportRef: externalViewportRef,
+  onCreateAt,
+  onBackgroundClick,
+}: Props) {
   const viewportRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!externalViewportRef) return
+    externalViewportRef.current = viewportRef.current
+  }, [externalViewportRef])
   const gridRef = useRef<HTMLDivElement>(null)
   const worldRef = useRef<HTMLDivElement>(null)
 
@@ -124,6 +141,7 @@ export function Canvas({ children, overlay, onCreateAt, onBackgroundClick }: Pro
         style={{ transformOrigin: '0 0' }}
       >
         {children}
+        {worldOverlay}
       </div>
 
       {overlay}
