@@ -1,5 +1,5 @@
 import {
-  CheckCircle,
+  CircleCheck,
   FileText,
   Image,
   LayoutGrid,
@@ -32,9 +32,10 @@ interface Tool {
 
 const TOOLS: Tool[] = [
   { type: 'note', label: 'Catatan', icon: FileText, priority: 0, available: true },
-  { type: 'todo', label: 'Todo', icon: CheckCircle, priority: 1, available: false },
-  { type: 'image', label: 'Gambar', icon: Image, priority: 2, available: false },
-  { type: 'link', label: 'Tautan', icon: Link2, priority: 3, available: false },
+  { type: 'todo', label: 'Todo', icon: CircleCheck, priority: 1, available: true },
+  { type: 'image', label: 'Gambar', icon: Image, priority: 2, available: true },
+  { type: 'link', label: 'Tautan', icon: Link2, priority: 3, available: true },
+  // Tahap 6.
   { type: 'board', label: 'Board', icon: LayoutGrid, priority: 4, available: false },
 ]
 

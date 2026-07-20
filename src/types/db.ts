@@ -19,10 +19,52 @@ export interface Board {
   updated_at: string
 }
 
-/** `{ text }` for note. Other types arrive in Tahap 5. */
+/** `{ text }` for note. */
 export interface NoteContent {
   text: string
 }
+
+export interface TodoItem {
+  id: string
+  text: string
+  done: boolean
+}
+
+/**
+ * `title` is an extension over the PRD shape (`{ items }` only) — the card
+ * header needs something to show, and deriving it from the first item makes
+ * checking that item off rename the card.
+ */
+export interface TodoContent {
+  title: string
+  items: TodoItem[]
+}
+
+/** `url` holds a storage path, not a public URL — the bucket is private. */
+export interface ImageContent {
+  url: string
+  alt: string
+  natural_w: number
+  natural_h: number
+}
+
+export interface LinkContent {
+  url: string
+  title?: string
+  favicon?: string
+  og_image?: string
+}
+
+/**
+ * The open Record arm covers rows written by other (possibly newer) clients —
+ * jsonb enforces nothing, so the guards below are the only gate.
+ */
+export type CardContent =
+  | NoteContent
+  | TodoContent
+  | ImageContent
+  | LinkContent
+  | Record<string, unknown>
 
 export interface Card {
   id: string
@@ -34,7 +76,7 @@ export interface Card {
   /** null means auto height — note cards grow with their content. */
   h: number | null
   z: number
-  content: NoteContent | Record<string, unknown>
+  content: CardContent
   /** Yjs state, arriving from PostgREST as a `\x…` hex string. Null before Tahap 3. */
   ydoc: string | null
   accent: string | null
@@ -47,6 +89,21 @@ export interface Card {
 
 export function isNoteContent(content: Card['content']): content is NoteContent {
   return typeof (content as NoteContent).text === 'string'
+}
+
+export function isTodoContent(content: Card['content']): content is TodoContent {
+  return Array.isArray((content as TodoContent).items)
+}
+
+export function isImageContent(content: Card['content']): content is ImageContent {
+  const c = content as ImageContent
+  return typeof c.url === 'string' && typeof c.natural_w === 'number' && typeof c.natural_h === 'number'
+}
+
+export function isLinkContent(content: Card['content']): content is LinkContent {
+  // Distinguished from image by the absence of dimensions.
+  const c = content as ImageContent
+  return typeof c.url === 'string' && typeof c.natural_w !== 'number'
 }
 
 /** Cards carry plain text in `content` even once Yjs owns editing (Tahap 3). */

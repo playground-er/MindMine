@@ -1,9 +1,17 @@
 import { IndexeddbPersistence } from 'y-indexeddb'
 import * as Y from 'yjs'
 
+import type { TodoItem } from '../types/db'
+import { itemsOf, seedItems } from './todoItems'
 import { LOCAL_ORIGIN } from './yOrigins'
 
 export { LOCAL_ORIGIN }
+
+/** Plain values used to fill a brand-new doc from the jsonb copy. */
+export interface DocSeed {
+  text?: string
+  items?: TodoItem[]
+}
 
 export interface CardDoc {
   doc: Y.Doc
@@ -31,7 +39,7 @@ export const TEXT_KEY = 'body'
  * an IndexedDB round trip each time. Ref counting keeps the doc alive for as
  * long as anything still points at it.
  */
-export function acquireCardDoc(cardId: string, seedText: string, seedState: Uint8Array | null): CardDoc {
+export function acquireCardDoc(cardId: string, seed: DocSeed, seedState: Uint8Array | null): CardDoc {
   const existing = registry.get(cardId)
   if (existing) {
     existing.refCount++
@@ -57,18 +65,24 @@ export function acquireCardDoc(cardId: string, seedText: string, seedState: Uint
   const whenSynced = new Promise<void>((resolve) => {
     persistence.once('synced', () => {
       /**
-       * Cards written before Tahap 3 have `content.text` but no `ydoc`. Seed
-       * from the plain text once, and only when the doc is genuinely empty —
-       * doing it unconditionally would duplicate the body on every open.
+       * Cards can predate their ydoc — written before Tahap 3, or created
+       * fresh with only jsonb content. Seed from the plain copy once, and only
+       * when the doc is genuinely empty — doing it unconditionally would
+       * duplicate the body on every open.
        */
-      if (text.length === 0 && seedText.length > 0) {
-        doc.transact(() => text.insert(0, seedText), LOCAL_ORIGIN)
+      if (seed.text && text.length === 0) {
+        doc.transact(() => text.insert(0, seed.text!), LOCAL_ORIGIN)
+      }
+      if (seed.items && seed.items.length > 0 && itemsOf(doc).length === 0) {
+        seedItems(doc, seed.items)
       }
       resolve()
     })
   })
 
-  const undoManager = new Y.UndoManager(text, {
+  // Tracking both roots keeps one ⌘Z history per card: a text edit and an
+  // item toggle undo in the order they happened, not per structure.
+  const undoManager = new Y.UndoManager([text, itemsOf(doc)], {
     trackedOrigins: new Set([LOCAL_ORIGIN]),
     captureTimeout: 400,
   })

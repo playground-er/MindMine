@@ -114,7 +114,9 @@ Semua otomatis. Tidak ada tombol save di mana pun, dan itu keputusan yang diseng
 
 ```
 note   { text: string }              // markdown subset
-todo   { items: [{id, text, done}] }
+todo   { title, items: [{id, text, done}] }  // title: revisi — header kartu butuh
+                                     // sumber; menurunkannya dari item pertama
+                                     // membuat mencentang item mengganti judul
 image  { url, alt, natural_w, natural_h }
 link   { url, title, favicon, og_image }
 board  { target_board_id }

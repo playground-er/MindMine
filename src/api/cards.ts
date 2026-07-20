@@ -1,5 +1,5 @@
 import { getSupabase } from '../lib/supabase'
-import type { Card } from '../types/db'
+import type { Card, CardType } from '../types/db'
 
 /** Live cards for a board. Soft-deleted rows are filtered out, not purged. */
 export async function listCards(boardId: string): Promise<Card[]> {
@@ -14,24 +14,28 @@ export async function listCards(boardId: string): Promise<Card[]> {
   return (data ?? []) as Card[]
 }
 
-export interface CreateNoteInput {
+export interface CreateCardInput {
   boardId: string
   memberId: string
+  type: CardType
   x: number
   y: number
   z: number
+  w?: number
+  content: Card['content']
 }
 
-export async function createNoteCard(input: CreateNoteInput): Promise<Card> {
+export async function createCard(input: CreateCardInput): Promise<Card> {
   const { data, error } = await getSupabase()
     .from('card')
     .insert({
       board_id: input.boardId,
-      type: 'note',
+      type: input.type,
       x: input.x,
       y: input.y,
       z: input.z,
-      content: { text: '' },
+      ...(input.w !== undefined ? { w: input.w } : {}),
+      content: input.content,
       created_by: input.memberId,
       updated_by: input.memberId,
     })
@@ -59,10 +63,15 @@ export async function updateCardGeometry(
   if (error) throw error
 }
 
-export async function updateCardText(id: string, text: string, memberId: string): Promise<void> {
+/** LWW content write, for types whose content is not Yjs-owned (image, link). */
+export async function updateCardContent(
+  id: string,
+  content: Card['content'],
+  memberId: string,
+): Promise<void> {
   const { error } = await getSupabase()
     .from('card')
-    .update({ content: { text }, updated_by: memberId })
+    .update({ content, updated_by: memberId })
     .eq('id', id)
 
   if (error) throw error
@@ -72,19 +81,19 @@ export async function updateCardText(id: string, text: string, memberId: string)
  * Flushes a settled Yjs document.
  *
  * Both columns are written together on purpose: `ydoc` is the authoritative
- * CRDT state, `content.text` is the plain copy that search and list view read.
+ * CRDT state, `content` is the plain copy that search and list view read.
  * PRD section 5 calls the duplication deliberate — searching inside CRDT binary
  * is expensive, and list view never needs character-level resolution.
  */
 export async function flushCardDoc(
   id: string,
   ydocHex: string,
-  text: string,
+  content: Card['content'],
   memberId: string,
 ): Promise<void> {
   const { error } = await getSupabase()
     .from('card')
-    .update({ ydoc: ydocHex, content: { text }, updated_by: memberId })
+    .update({ ydoc: ydocHex, content, updated_by: memberId })
     .eq('id', id)
 
   if (error) throw error

@@ -3,30 +3,33 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { fetchOrCreateRootBoard } from '../api/board'
 import {
-  createNoteCard,
+  createCard,
   flushCardDoc,
   listCards,
   restoreCard,
   softDeleteCard,
+  updateCardContent,
   updateCardGeometry,
 } from '../api/cards'
 import { listMembers } from '../api/members'
+import { uploadCardImage } from '../api/storage'
 import { usePresence } from '../hooks/usePresence'
 import { useRealtimeCards } from '../hooks/useRealtimeCards'
 import { useVisibleCards } from '../hooks/useVisibleCards'
 import { screenToWorld, snap } from '../lib/geometry'
+import { fetchLinkMeta, isProbablyUrl } from '../lib/linkMeta'
 import { TransportContext } from '../lib/transportContext'
 import { YDocTransport } from '../lib/ydocTransport'
 import { useBoardStore } from '../store/boardStore'
 import { useCanvasStore } from '../store/canvasStore'
 import { usePresenceStore } from '../store/presenceStore'
 import type { Point } from '../types/canvas'
-import type { Card, Member } from '../types/db'
+import type { Card, CardType, Member } from '../types/db'
 import { Canvas } from './Canvas'
+import { CardView } from './CardView'
 import { EmptyState } from './EmptyState'
 import { FloatingNavbar } from './FloatingNavbar'
 import { Header } from './Header'
-import { NoteCard } from './NoteCard'
 import { PresenceLayer } from './PresenceLayer'
 import { Toast } from './Toast'
 
@@ -35,9 +38,24 @@ const UNDO_WINDOW_MS = 5000
 /** Module scope so cards without peer editors keep a stable prop identity. */
 const NO_EDITORS: Member[] = []
 
+/** Fresh content per type. Todo starts with one empty item as the invitation. */
+function initialContent(type: CardType): Card['content'] {
+  switch (type) {
+    case 'note':
+      return { text: '' }
+    case 'todo':
+      return { title: '', items: [{ id: crypto.randomUUID(), text: '', done: false }] }
+    case 'link':
+      return { url: '' }
+    default:
+      return {}
+  }
+}
+
 export function BoardView({ member }: { member: Member }) {
   const queryClient = useQueryClient()
   const [pendingUndo, setPendingUndo] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const selectedId = useBoardStore((s) => s.selectedId)
   const editingId = useBoardStore((s) => s.editingId)
@@ -84,7 +102,7 @@ export function BoardView({ member }: { member: Member }) {
 
   usePresence({ boardId: boardId ?? '', memberId: member.id, toWorld })
 
-  /** Navbar-created cards land in the middle of what you are looking at. */
+  /** Navbar- and paste-created cards land in the middle of what you see. */
   const viewportCenterWorld = useCallback((): Point => {
     const { viewport, viewSize } = useCanvasStore.getState()
     return screenToWorld({ x: viewSize.w / 2, y: viewSize.h / 2 }, viewport)
@@ -103,17 +121,21 @@ export function BoardView({ member }: { member: Member }) {
   )
 
   const createMutation = useMutation({
-    mutationFn: (world: Point) =>
-      createNoteCard({
+    mutationFn: (input: { type: CardType; world: Point; content: Card['content']; w?: number }) =>
+      createCard({
         boardId: boardId!,
         memberId: member.id,
-        x: snap(world.x, true),
-        y: snap(world.y, true),
+        type: input.type,
+        x: snap(input.world.x, true),
+        y: snap(input.world.y, true),
         z: (cardsQuery.data?.length ?? 0) + 1,
+        w: input.w,
+        content: input.content,
       }),
     onSuccess: (card) => {
       queryClient.setQueryData<Card[]>(cardsKey, (prev) => [...(prev ?? []), card])
-      beginEdit(card.id)
+      // Image has no edit mode; dropping straight into edit fits the rest.
+      if (card.type !== 'image') beginEdit(card.id)
     },
   })
 
@@ -124,8 +146,14 @@ export function BoardView({ member }: { member: Member }) {
   })
 
   const flushMutation = useMutation({
-    mutationFn: ({ id, text, ydocHex }: { id: string; text: string; ydocHex: string }) =>
-      flushCardDoc(id, ydocHex, text, member.id),
+    mutationFn: ({ id, content, ydocHex }: { id: string; content: Card['content']; ydocHex: string }) =>
+      flushCardDoc(id, ydocHex, content, member.id),
+  })
+
+  const contentMutation = useMutation({
+    mutationFn: ({ id, content }: { id: string; content: Card['content'] }) =>
+      updateCardContent(id, content, member.id),
+    onError: () => void queryClient.invalidateQueries({ queryKey: cardsKey }),
   })
 
   const deleteMutation = useMutation({
@@ -144,6 +172,85 @@ export function BoardView({ member }: { member: Member }) {
     },
   })
 
+  /** Reads dimensions, uploads to the private bucket, then creates the card. */
+  const createImageFromFile = useCallback(
+    async (file: File, world: Point) => {
+      const uploaded = await uploadCardImage(file)
+      createMutation.mutate({
+        type: 'image',
+        world,
+        w: 320,
+        content: {
+          url: uploaded.path,
+          alt: file.name.replace(/\.[^.]+$/, ''),
+          natural_w: uploaded.natural_w,
+          natural_h: uploaded.natural_h,
+        },
+      })
+    },
+    [createMutation],
+  )
+
+  /** Navbar entry point. */
+  const handleCreate = useCallback(
+    (type: CardType) => {
+      if (type === 'image') {
+        fileInputRef.current?.click()
+        return
+      }
+      createMutation.mutate({ type, world: viewportCenterWorld(), content: initialContent(type) })
+    },
+    [createMutation, viewportCenterWorld],
+  )
+
+  /**
+   * Canvas paste: image file → image card, URL → link card (metadata resolved
+   * after the card exists — never an error card), any other text → note.
+   */
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      if (useBoardStore.getState().editingId) return
+      const target = e.target
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable || target.tagName === 'TEXTAREA' || target.tagName === 'INPUT')
+      ) {
+        return
+      }
+
+      const file = Array.from(e.clipboardData?.files ?? []).find((f) => f.type.startsWith('image/'))
+      if (file) {
+        e.preventDefault()
+        void createImageFromFile(file, viewportCenterWorld())
+        return
+      }
+
+      const text = e.clipboardData?.getData('text/plain')?.trim()
+      if (!text) return
+      e.preventDefault()
+
+      if (isProbablyUrl(text)) {
+        createMutation.mutate(
+          { type: 'link', world: viewportCenterWorld(), content: { url: text } },
+          {
+            onSuccess: (card) => {
+              void fetchLinkMeta(text).then((meta) => {
+                patchCache(card.id, { content: meta })
+                contentMutation.mutate({ id: card.id, content: meta })
+              })
+            },
+          },
+        )
+        return
+      }
+
+      createMutation.mutate({ type: 'note', world: viewportCenterWorld(), content: { text } })
+    }
+
+    window.addEventListener('paste', onPaste)
+    return () => window.removeEventListener('paste', onPaste)
+  }, [createMutation, contentMutation, createImageFromFile, patchCache, viewportCenterWorld])
+
   // The undo offer expires on its own; the card stays recoverable for 30 days.
   useEffect(() => {
     if (!pendingUndo) return
@@ -159,7 +266,7 @@ export function BoardView({ member }: { member: Member }) {
       const target = e.target
       if (
         target instanceof HTMLElement &&
-        (target.isContentEditable || target.tagName === 'TEXTAREA')
+        (target.isContentEditable || target.tagName === 'TEXTAREA' || target.tagName === 'INPUT')
       ) {
         return
       }
@@ -181,7 +288,7 @@ export function BoardView({ member }: { member: Member }) {
 
   /**
    * Who is inside which card, derived once per presence change rather than
-   * inside each card. Reading the presence store from NoteCard would couple
+   * inside each card. Reading the presence store from a card would couple
    * every card to cursor traffic — the coupling PRD section 11 warns about.
    */
   const peers = usePresenceStore((s) => s.peers)
@@ -206,12 +313,20 @@ export function BoardView({ member }: { member: Member }) {
     [patchCache, geometryMutation],
   )
 
-  const onTextSettled = useCallback(
-    (id: string, text: string, ydocHex: string) => {
-      patchCache(id, { content: { text } })
-      flushMutation.mutate({ id, text, ydocHex })
+  const onDocSettled = useCallback(
+    (id: string, content: Card['content'], ydocHex: string) => {
+      patchCache(id, { content })
+      flushMutation.mutate({ id, content, ydocHex })
     },
     [patchCache, flushMutation],
+  )
+
+  const onContentChange = useCallback(
+    (id: string, content: Card['content']) => {
+      patchCache(id, { content })
+      contentMutation.mutate({ id, content })
+    },
+    [patchCache, contentMutation],
   )
 
   const cards = useMemo(() => cardsQuery.data ?? [], [cardsQuery.data])
@@ -229,13 +344,13 @@ export function BoardView({ member }: { member: Member }) {
     <TransportContext.Provider value={transport}>
       <Canvas
         viewportRef={viewportElRef}
-        onCreateAt={(world) => createMutation.mutate(world)}
+        onCreateAt={(world) => createMutation.mutate({ type: 'note', world, content: { text: '' } })}
         onBackgroundClick={() => select(null)}
         worldOverlay={<PresenceLayer members={memberMap} />}
         overlay={
           <>
             <Header title={boardQuery.data?.title ?? 'MindMine'} members={memberMap} />
-            <FloatingNavbar onCreate={() => createMutation.mutate(viewportCenterWorld())} />
+            <FloatingNavbar onCreate={handleCreate} />
             {cards.length === 0 && <EmptyState />}
             {pendingUndo && (
               <Toast
@@ -244,11 +359,22 @@ export function BoardView({ member }: { member: Member }) {
                 onAction={() => restoreMutation.mutate(pendingUndo)}
               />
             )}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                e.target.value = ''
+                if (file) void createImageFromFile(file, viewportCenterWorld())
+              }}
+            />
           </>
         }
       >
         {visibleCards.map((card) => (
-          <NoteCard
+          <CardView
             key={card.id}
             card={card}
             isCompact={isCompact}
@@ -257,7 +383,8 @@ export function BoardView({ member }: { member: Member }) {
             isEditing={editingId === card.id}
             peerEditors={editorsByCard.get(card.id) ?? NO_EDITORS}
             onCommitGeometry={commitGeometry}
-            onTextSettled={onTextSettled}
+            onDocSettled={onDocSettled}
+            onContentChange={onContentChange}
           />
         ))}
       </Canvas>

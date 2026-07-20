@@ -51,9 +51,12 @@ export function useRealtimeCards(boardId: string | undefined) {
             if (index === -1) return [...prev, row]
 
             const next = [...prev]
-            // Text is owned by Yjs; taking the server's copy here would fight
-            // whatever the local doc is holding mid-edit.
-            next[index] = { ...row, content: prev[index]!.content }
+            // Note and todo content is owned by Yjs; taking the server's copy
+            // would fight whatever the local doc holds mid-edit. Image and
+            // link content is LWW and the server copy is the newer truth
+            // (e.g. link metadata resolved by another tab).
+            const yjsOwned = row.type === 'note' || row.type === 'todo'
+            next[index] = yjsOwned ? { ...row, content: prev[index]!.content } : row
             return next
           })
         },

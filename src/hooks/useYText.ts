@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } fro
 import * as Y from 'yjs'
 
 import { applyStringDiff } from '../lib/textDiff'
-import { acquireCardDoc, LOCAL_ORIGIN, type CardDoc } from '../lib/ydocRegistry'
+import { acquireCardDoc, LOCAL_ORIGIN, type CardDoc, type DocSeed } from '../lib/ydocRegistry'
 
 interface Result {
   value: string
@@ -21,15 +21,15 @@ interface Result {
  */
 export function useYText(
   cardId: string,
-  seedText: string,
+  seed: DocSeed,
   seedState: Uint8Array | null,
   textareaRef: RefObject<HTMLTextAreaElement | null>,
 ): Result {
   // Seeds are only consulted when the doc is first created, so a changing
-  // `seedText` from a refetch must not rebuild it.
-  const seedRef = useRef({ seedText, seedState })
+  // seed from a refetch must not rebuild it.
+  const seedRef = useRef({ seed, seedState })
   const cardDoc = useMemo(
-    () => acquireCardDoc(cardId, seedRef.current.seedText, seedRef.current.seedState),
+    () => acquireCardDoc(cardId, seedRef.current.seed, seedRef.current.seedState),
     [cardId],
   )
 
